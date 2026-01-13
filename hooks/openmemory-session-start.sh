@@ -29,18 +29,13 @@ fi
 memories=$(echo "$response" | jq -r '.matches[]?.content // empty' 2>/dev/null | head -10)
 
 if [ -n "$memories" ]; then
-  # Escape for JSON
-  escaped_memories=$(echo "$memories" | jq -Rs '.')
-
-  # Output JSON with additionalContext for Claude
-  cat <<EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "## Relevant memories from OpenMemory:\n${escaped_memories:1:-1}"
-  }
-}
-EOF
+  # Build JSON output with jq to handle escaping properly
+  echo "$memories" | jq -Rs '{
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext: ("## Relevant memories from OpenMemory:\n" + .)
+    }
+  }'
 fi
 
 exit 0
