@@ -1,0 +1,62 @@
+## OpenMemory Integration (MANDATORY)
+
+OpenMemory provides persistent long-term memory across sessions. USE IT PROACTIVELY.
+
+### openmemory_query - Search memories
+**When:** At the START of every session and when encountering unfamiliar code/concepts
+- Query for project context before making architectural decisions
+- Query for past bugs/solutions when debugging similar issues
+- Query for user preferences before making UX/style choices
+
+**Parameters:**
+- `query`: Natural language search (required)
+- `k`: Number of results (default 8, increase for broad searches)
+- `sector`: Filter by type - episodic (events), semantic (facts), procedural (how-to), emotional (feelings), reflective (insights)
+- `type`: "contextual" (semantic search), "factual" (knowledge graph), "unified" (both)
+
+### openmemory_store - Save new memories
+**When:** After completing significant work - DON'T WAIT until end of session
+- Immediately after fixing a non-trivial bug
+- After discovering project architecture/patterns
+- When user states a preference or requirement
+- After making an architectural decision with rationale
+- When learning something that would help future sessions
+
+**Parameters:**
+- `content`: The memory text (required) - be specific and include context
+- `tags`: Array of strings for categorisation. Use consistently:
+  - `bugfix` - Bug fixes and their solutions
+  - `discovery` - Learned facts about codebase/architecture
+  - `decision` - Architectural or design decisions made
+  - `preference` - User preferences and requirements
+  - `procedure` - How to do something in this project
+  - `project:<name>` - Associate with specific project
+
+**Best practice:** Write memories as if explaining to a future Claude who has no context.
+
+### openmemory_list - Browse recent memories
+**When:** To review what's been stored, check for duplicates, or get memory IDs
+- `limit`: Number to return (default 10, max 50)
+- `sector`: Filter by memory type
+
+### openmemory_get - Fetch specific memory
+**When:** To retrieve full details of a memory found via query/list
+- `id`: Memory UUID (required)
+- `include_vectors`: Set true for debugging similarity issues
+
+### openmemory_reinforce - Boost memory importance
+**When:** A memory proves useful or gets referenced repeatedly
+- `id`: Memory UUID (required)
+- `boost`: Amount to increase salience (default 0.1)
+
+Use this when a queried memory was exactly what was needed - it trains the recall system.
+
+### openmemory_delete - Remove a memory
+**When:** Memory is wrong, outdated, or duplicate
+- `id`: Memory UUID (required)
+
+### Session workflow
+1. **Session start:** Query for relevant context about the current project/task
+2. **During work:** Store discoveries and decisions as they happen
+3. **After success:** Reinforce memories that proved useful
+4. **Clean up:** Delete outdated or incorrect memories
