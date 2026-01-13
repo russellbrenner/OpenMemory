@@ -3,33 +3,24 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install system dependencies required for native module compilation,
-# plus curl and bash (needed to run the Bun installation script)
-RUN apk add --no-cache python3 make g++ curl bash
-
-# Install Bun globally and relocate it to a shared, persistent location
-RUN curl -fsSL https://bun.sh/install | bash \
- && mv /root/.bun /opt/bun \
- && ln -s /opt/bun/bin/bun /usr/local/bin/bun
-
-# Ensure Bun is available in PATH for subsequent commands
-ENV PATH="/opt/bun/bin:${PATH}"
+# Install system dependencies required for native module compilation (sqlite3)
+RUN apk add --no-cache python3 make g++
 
 # Copy package manifests to install dependencies
 COPY package*.json ./
 
-# Install all dependencies (including devDependencies) using Bun
-# --frozen-lockfile ensures reproducible builds
-# --concurrent-scripts and --network-concurrency optimize install speed
-RUN bun install --frozen-lockfile
+# Install all dependencies (including devDependencies) using npm
+RUN npm ci
 
 # Copy source code and build the application
 COPY src/ ./src/
 COPY tsconfig.json ./
-RUN bun run build
 
-# Remove devDependencies to reduce image size 
-# (Removing all the devDependencies that we dont need in the final build)
+# Increase Node.js heap size for TypeScript compilation
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+RUN npm run build
+
+# Remove devDependencies to reduce image size
 RUN npm prune --omit=dev
 
 
