@@ -187,6 +187,13 @@ Or with Docker:
 docker compose up --build -d
 ```
 
+**Memory tuning:** The Node.js server uses a default heap of 128MB. For larger memory stores or heavy usage, increase the heap by setting `NODE_OPTIONS` in the Dockerfile's production stage or via environment:
+
+```bash
+# In docker-compose.yml environment section:
+- NODE_OPTIONS=--max-old-space-size=256
+```
+
 The backend exposes:
 
 - `/api/memory/*` – memory operations
