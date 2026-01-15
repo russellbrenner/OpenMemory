@@ -49,8 +49,8 @@ RUN mkdir -p /data \
 # Switch to non-root user
 USER appuser
 
-# Increase Node.js heap size for runtime (3x default for memory operations)
-ENV NODE_OPTIONS="--max-old-space-size=128"
+# Increase Node.js heap size for runtime (vector operations and embeddings need headroom)
+ENV NODE_OPTIONS="--max-old-space-size=512"
 
 # Expose the application port
 EXPOSE 8080
