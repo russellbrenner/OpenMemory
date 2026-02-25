@@ -77,10 +77,15 @@ def has_temporal_markers(text: str) -> bool:
     ]
     return any(re.search(p, text, re.I) for p in pats)
 
-def compute_tag_match_score(mem: dict, q_toks: Set[str]) -> float:
-    if not mem or not mem.get("tags"): return 0.0
+def compute_tag_match_score(mem, q_toks: Set[str]) -> float:
+    if not mem: return 0.0
     try:
-        tags = json.loads(mem["tags"]) if isinstance(mem["tags"], str) else mem["tags"]
+        raw_tags = mem["tags"]
+    except (KeyError, IndexError):
+        return 0.0
+    if not raw_tags: return 0.0
+    try:
+        tags = json.loads(raw_tags) if isinstance(raw_tags, str) else raw_tags
         if not isinstance(tags, list): return 0.0
         matches = 0
         for tag in tags:
