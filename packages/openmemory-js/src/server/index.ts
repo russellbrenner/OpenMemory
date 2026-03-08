@@ -26,7 +26,7 @@ import {
     orphan_memories,
     memories_growth_7d,
 } from "../core/metrics";
-import { all_async, run_async, memories_table } from "../core/db";
+import { all_async, run_async, memories_table, embed_log_table } from "../core/db";
 
 const ASC = `   ____                   __  __
   / __ \\                 |  \\/  |
@@ -169,7 +169,7 @@ const run_maintenance = async () => {
 
         // 1. Prune old embed_logs
         const log_cutoff = Date.now() - env.embed_log_retention_days * 24 * 60 * 60 * 1000;
-        const log_del = await run_async(`DELETE FROM embed_logs WHERE created_at < ?`, [log_cutoff]);
+        const log_del = await run_async(`DELETE FROM ${embed_log_table} WHERE ts < ?`, [log_cutoff]);
         results.pruned_embed_logs = (log_del as any)?.changes ?? 0;
         maintenance_pruned_embed_logs.set(results.pruned_embed_logs as number);
 

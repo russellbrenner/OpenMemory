@@ -1,6 +1,6 @@
 
 import { Memory } from "../src/core/memory";
-import { run_async, q } from "../src/core/db";
+import { run_async, q, embed_log_table, make_transaction } from "../src/core/db";
 
 // Mock time for evolutionary stability
 let mockTime: number | null = null;
@@ -150,11 +150,37 @@ async function test_content_robustness() {
     console.log(" -> PASS: Complex formats handled.");
 }
 
+async function test_embed_log_prune() {
+    console.log("\n[Regression] embed_log prune uses ts column (not created_at)");
+    // Insert a log entry with ts in the past using the prepared statement
+    const log_id = `prune-regression-${Date.now()}`;
+    await q.ins_log.run(log_id, "test-model", "completed", Date.now() - 1_000_000, null);
+    // Run the same DELETE that maintenance uses — must not throw
+    const cutoff = Date.now();
+    await run_async(`DELETE FROM ${embed_log_table} WHERE ts < ?`, [cutoff]);
+    console.log(" -> PASS: Maintenance prune query uses correct table and ts column.");
+}
+
+async function test_transaction_factory() {
+    console.log("\n[Regression] make_transaction() creates usable transaction instances");
+    // Verify sequential creates from make_transaction() each succeed
+    const t1 = make_transaction();
+    await t1.begin();
+    await t1.rollback();
+    // Second instance after first completes must not throw
+    const t2 = make_transaction();
+    await t2.begin();
+    await t2.rollback();
+    console.log(" -> PASS: make_transaction() instances begin/rollback without collision.");
+}
+
 async function run_all() {
     try {
         await test_evolutionary_stability();
         await test_boolean_metadata_logic();
         await test_content_robustness();
+        await test_embed_log_prune();
+        await test_transaction_factory();
         console.log("\n[OMNIBUS] ALL TESTS PASSED");
         process.exit(0);
     } catch (e) {

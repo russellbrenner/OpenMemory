@@ -59,6 +59,12 @@ let transaction: {
 let q: q_type;
 let vector_store: VectorStore;
 let memories_table: string;
+let embed_log_table = "embed_logs"; // default for SQLite; overwritten by PG init
+let make_transaction: () => {
+    begin(): Promise<void>;
+    commit(): Promise<void>;
+    rollback(): Promise<void>;
+} = () => ({ begin: async () => {}, commit: async () => {}, rollback: async () => {} });
 
 const is_pg = env.metadata_backend === "postgres";
 
@@ -111,6 +117,7 @@ if (is_pg) {
     const v = `"${sc}"."${process.env.OM_VECTOR_TABLE || "openmemory_vectors"}"`;
     const w = `"${sc}"."openmemory_waypoints"`;
     const l = `"${sc}"."openmemory_embed_logs"`;
+    embed_log_table = l;
     const f = `"${sc}"."openmemory_memories_fts"`;
     const exec = async (sql: string, p: any[] = []) => {
         const c = cli || pg;
@@ -121,11 +128,33 @@ if (is_pg) {
     };
     get_async = async (sql, p = []) => (await exec(sql, p))[0];
     all_async = async (sql, p = []) => await exec(sql, p);
+    // Mutex serialises concurrent transactions instead of throwing "transaction active"
+    class PgTxMutex {
+        private mutex = Promise.resolve();
+        lock(): Promise<() => void> {
+            let unlock: () => void = () => {};
+            const willUnlock = new Promise<void>(resolve => { unlock = resolve; });
+            const willAcquire = this.mutex.then(() => unlock);
+            this.mutex = this.mutex.then(() => willUnlock);
+            return willAcquire;
+        }
+    }
+    const pgTxLock = new PgTxMutex();
+    let pgTxRelease: (() => void) | null = null;
     transaction = {
         begin: async () => {
-            if (cli) throw new Error("transaction active");
+            const release = await pgTxLock.lock();
+            pgTxRelease = release;
             cli = await pg.connect();
-            await cli.query("BEGIN");
+            try {
+                await cli.query("BEGIN");
+            } catch (e) {
+                cli.release();
+                cli = null;
+                pgTxRelease();
+                pgTxRelease = null;
+                throw e;
+            }
         },
         commit: async () => {
             if (!cli) return;
@@ -134,6 +163,7 @@ if (is_pg) {
             } finally {
                 cli.release();
                 cli = null;
+                if (pgTxRelease) { pgTxRelease(); pgTxRelease = null; }
             }
         },
         rollback: async () => {
@@ -143,9 +173,11 @@ if (is_pg) {
             } finally {
                 cli.release();
                 cli = null;
+                if (pgTxRelease) { pgTxRelease(); pgTxRelease = null; }
             }
         },
     };
+    make_transaction = () => transaction;
     let ready = false;
     const wait_ready = () =>
         new Promise<void>((ok) => {
@@ -853,6 +885,7 @@ if (is_pg) {
             }
         },
     };
+    make_transaction = () => transaction;
     q = {
         ins_mem: {
             run: (...p) =>
@@ -1075,4 +1108,4 @@ export const log_maint_op = async (
     }
 };
 
-export { q, transaction, all_async, get_async, run_async, memories_table, vector_store };
+export { q, transaction, make_transaction, all_async, get_async, run_async, memories_table, embed_log_table, vector_store };
