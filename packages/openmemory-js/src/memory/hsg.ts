@@ -453,6 +453,7 @@ import {
     all_async,
     run_async,
     transaction,
+    make_transaction,
     log_maint_op,
     memories_table,
 } from "../core/db";
@@ -1133,7 +1134,19 @@ export async function add_hsg_memory(
     const use_chunking = chunks.length > 1;
     const classification = classify_content(content, metadata);
     const all_sectors = [classification.primary, ...classification.additional];
-    await transaction.begin();
+    // Embedding is slow (30-150 ms per request); run it before the transaction
+    // so the DB connection is not held hostage during API calls.
+    const emb_res = await embedMultiSector(
+        id,
+        content,
+        all_sectors,
+        use_chunking ? chunks : undefined,
+    );
+    const mean_vec = calc_mean_vec(emb_res, all_sectors);
+    const mean_vec_buf = vectorToBuffer(mean_vec);
+
+    const txn = make_transaction();
+    await txn.begin();
     try {
         const max_seg_res = await q.get_max_segment.get();
         let cur_seg = max_seg_res?.max_seg ?? 0;
@@ -1177,12 +1190,6 @@ export async function add_hsg_memory(
             0,
             upsert_key || null,
         );
-        const emb_res = await embedMultiSector(
-            id,
-            content,
-            all_sectors,
-            use_chunking ? chunks : undefined,
-        );
         for (const result of emb_res) {
             await vector_store.storeVector(
                 id,
@@ -1192,10 +1199,7 @@ export async function add_hsg_memory(
                 user_id || "anonymous",
             );
         }
-        const mean_vec = calc_mean_vec(emb_res, all_sectors);
-        const mean_vec_buf = vectorToBuffer(mean_vec);
         await q.upd_mean_vec.run(id, mean_vec.length, mean_vec_buf);
-
 
         if (tier === "smart" && mean_vec.length > 128) {
             const comp = compress_vec_for_storage(mean_vec, 128);
@@ -1204,7 +1208,7 @@ export async function add_hsg_memory(
         }
 
         await create_single_waypoint(id, mean_vec, now, user_id);
-        await transaction.commit();
+        await txn.commit();
         return {
             id,
             primary_sector: classification.primary,
@@ -1212,22 +1216,23 @@ export async function add_hsg_memory(
             chunks: chunks.length,
         };
     } catch (error) {
-        await transaction.rollback();
+        await txn.rollback();
         throw error;
     }
 }
 export async function delete_memory(id: string): Promise<boolean> {
     const mem = await q.get_mem.get(id);
     if (!mem) return false;
-    await transaction.begin();
+    const txn = make_transaction();
+    await txn.begin();
     try {
         await q.del_mem.run(id);
         await q.del_waypoints.run(id, id);
         await vector_store.deleteVectors(id);
-        await transaction.commit();
+        await txn.commit();
         return true;
     } catch (error) {
-        await transaction.rollback();
+        await txn.rollback();
         throw error;
     }
 }
@@ -1269,24 +1274,34 @@ export async function update_memory(
             options?.user_id || mem.user_id
         ).catch((e) => console.error("[versioning] save failed:", e));
     }
-    await transaction.begin();
+    // Pre-compute embeddings outside the transaction to avoid holding DB connections
+    // during slow API calls. Only computed when content actually changes.
+    let pre_emb_res: Awaited<ReturnType<typeof embedMultiSector>> | null = null;
+    let pre_mean_vec: number[] | null = null;
+    let pre_mean_vec_buf: Buffer | null = null;
+    let pre_classification: ReturnType<typeof classify_content> | null = null;
+    let pre_all_sectors: string[] | null = null;
+    if (content !== undefined && content !== mem.content) {
+        const chunks = chunk_text(new_content);
+        const use_chunking = chunks.length > 1;
+        pre_classification = classify_content(new_content, metadata);
+        pre_all_sectors = [pre_classification.primary, ...pre_classification.additional];
+        pre_emb_res = await embedMultiSector(
+            id,
+            new_content,
+            pre_all_sectors,
+            use_chunking ? chunks : undefined,
+        );
+        pre_mean_vec = calc_mean_vec(pre_emb_res, pre_all_sectors);
+        pre_mean_vec_buf = vectorToBuffer(pre_mean_vec);
+    }
+
+    const txn = make_transaction();
+    await txn.begin();
     try {
-        if (content !== undefined && content !== mem.content) {
-            const chunks = chunk_text(new_content);
-            const use_chunking = chunks.length > 1;
-            const classification = classify_content(new_content, metadata);
-            const all_sectors = [
-                classification.primary,
-                ...classification.additional,
-            ];
+        if (pre_emb_res && pre_classification && pre_all_sectors && pre_mean_vec && pre_mean_vec_buf) {
             await vector_store.deleteVectors(id);
-            const emb_res = await embedMultiSector(
-                id,
-                new_content,
-                all_sectors,
-                use_chunking ? chunks : undefined,
-            );
-            for (const result of emb_res) {
+            for (const result of pre_emb_res) {
                 await vector_store.storeVector(
                     id,
                     result.sector,
@@ -1295,12 +1310,10 @@ export async function update_memory(
                     mem.user_id || "anonymous",
                 );
             }
-            const mean_vec = calc_mean_vec(emb_res, all_sectors);
-            const mean_vec_buf = vectorToBuffer(mean_vec);
-            await q.upd_mean_vec.run(id, mean_vec.length, mean_vec_buf);
+            await q.upd_mean_vec.run(id, pre_mean_vec.length, pre_mean_vec_buf);
             await q.upd_mem_with_sector.run(
                 new_content,
-                classification.primary,
+                pre_classification.primary,
                 new_tags,
                 new_meta,
                 Date.now(),
@@ -1315,12 +1328,12 @@ export async function update_memory(
                 id,
             );
         }
-        await transaction.commit();
+        await txn.commit();
         // Get updated version number
         const updated = await q.get_mem.get(id);
         return { id, updated: true, version: updated?.version || mem.version + 1 };
     } catch (error) {
-        await transaction.rollback();
+        await txn.rollback();
         throw error;
     }
 }
