@@ -452,7 +452,6 @@ import {
     get_async,
     all_async,
     run_async,
-    transaction,
     make_transaction,
     log_maint_op,
     memories_table,
