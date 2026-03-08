@@ -60,6 +60,9 @@ let q: q_type;
 let vector_store: VectorStore;
 let memories_table: string;
 let embed_log_table = "embed_logs"; // default for SQLite; overwritten by PG init
+let vectors_table = "vectors";     // default for SQLite; overwritten by PG init
+let waypoints_table = "waypoints"; // default for SQLite; overwritten by PG init
+let users_table = "users";         // default for SQLite; overwritten by PG init
 let make_transaction: () => {
     begin(): Promise<void>;
     commit(): Promise<void>;
@@ -118,6 +121,9 @@ if (is_pg) {
     const w = `"${sc}"."openmemory_waypoints"`;
     const l = `"${sc}"."openmemory_embed_logs"`;
     embed_log_table = l;
+    vectors_table = v;
+    waypoints_table = w;
+    users_table = `"${sc}"."openmemory_users"`;
     const f = `"${sc}"."openmemory_memories_fts"`;
     const exec = async (sql: string, p: any[] = []) => {
         const c = cli || pg;
@@ -1108,4 +1114,4 @@ export const log_maint_op = async (
     }
 };
 
-export { q, transaction, make_transaction, all_async, get_async, run_async, memories_table, embed_log_table, vector_store };
+export { q, transaction, make_transaction, all_async, get_async, run_async, memories_table, embed_log_table, vectors_table, waypoints_table, users_table, vector_store };

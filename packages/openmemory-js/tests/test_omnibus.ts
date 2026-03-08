@@ -1,6 +1,6 @@
 
 import { Memory } from "../src/core/memory";
-import { run_async, q, embed_log_table, make_transaction } from "../src/core/db";
+import { run_async, q, embed_log_table, make_transaction, memories_table, vectors_table, waypoints_table, users_table } from "../src/core/db";
 
 // Mock time for evolutionary stability
 let mockTime: number | null = null;
@@ -10,11 +10,10 @@ Date.now = () => (mockTime !== null ? mockTime : originalNow());
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function cleanup(user_id: string) {
-    await run_async(`DELETE FROM memories`);
-    try { await run_async(`DELETE FROM vectors`); } catch { }
-    try { await run_async(`DELETE FROM openmemory_vectors`); } catch { }
-    try { await run_async(`DELETE FROM waypoints`); } catch { }
-    try { await run_async(`DELETE FROM users`); } catch { }
+    await run_async(`DELETE FROM ${memories_table}`);
+    try { await run_async(`DELETE FROM ${vectors_table}`); } catch { }
+    try { await run_async(`DELETE FROM ${waypoints_table}`); } catch { }
+    try { await run_async(`DELETE FROM ${users_table}`); } catch { }
     if (global.gc) global.gc();
 }
 
