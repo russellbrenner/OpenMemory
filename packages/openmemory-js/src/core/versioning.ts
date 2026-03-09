@@ -7,7 +7,7 @@
  * - Version retrieval and comparison
  */
 
-import { run_async, all_async, get_async, q, transaction } from "./db";
+import { run_async, all_async, get_async, q, make_transaction } from "./db";
 import { env } from "./cfg";
 import { rid, now, j } from "../utils";
 
@@ -330,7 +330,8 @@ export async function restore_version(
 
     // Update the memory with restored content
     const new_version = current.version + 1;
-    await transaction.begin();
+    const txn = make_transaction();
+    await txn.begin();
     try {
         await q.upd_mem_with_sector.run(
             version.content,
@@ -340,7 +341,7 @@ export async function restore_version(
             now(),
             memory_id
         );
-        await transaction.commit();
+        await txn.commit();
 
         // Save the restored state as well
         await save_version(
@@ -356,7 +357,7 @@ export async function restore_version(
 
         return { success: true, new_version };
     } catch (e) {
-        await transaction.rollback();
+        await txn.rollback();
         throw e;
     }
 }

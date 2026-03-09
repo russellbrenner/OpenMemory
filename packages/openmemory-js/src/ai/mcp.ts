@@ -11,7 +11,7 @@ import {
     delete_memory,
     sector_configs,
 } from "../memory/hsg";
-import { q, all_async, memories_table, vector_store } from "../core/db";
+import { q, all_async, memories_table, waypoints_table, vector_store } from "../core/db";
 import { getEmbeddingInfo } from "../memory/embed";
 import { j, p } from "../utils";
 import type { sector_type, mem_row, rpc_err_code } from "../core/types";
@@ -657,7 +657,7 @@ export const create_mcp_srv = () => {
                 params,
             );
             const sector_rows = await all_async(
-                `SELECT primary_sector, COUNT(*) as count, ROUND(AVG(salience), 4) as avg_salience FROM ${memories_table} ${where} GROUP BY primary_sector`,
+                `SELECT primary_sector, COUNT(*) as count, AVG(salience) as avg_salience FROM ${memories_table} ${where} GROUP BY primary_sector`,
                 params,
             );
             const [dedup_row] = await all_async(
@@ -670,7 +670,7 @@ export const create_mcp_srv = () => {
                 [...params, seven_days_ago],
             );
             const [orphan_row] = await all_async(
-                `SELECT COUNT(*) as orphans FROM ${memories_table} m ${where ? where + ' AND' : 'WHERE'} NOT EXISTS (SELECT 1 FROM waypoints w WHERE w.src_id = m.id OR w.dst_id = m.id)`,
+                `SELECT COUNT(*) as orphans FROM ${memories_table} m ${where ? where + ' AND' : 'WHERE'} NOT EXISTS (SELECT 1 FROM ${waypoints_table} w WHERE w.src_id = m.id OR w.dst_id = m.id)`,
                 params,
             );
 
