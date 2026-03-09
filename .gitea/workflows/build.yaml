@@ -89,8 +89,8 @@ jobs:
             cat /tmp/patch_response.json
             exit 1
           fi
-          # Poll rollout status via the API until all replicas are ready (timeout 120s)
-          DEADLINE=$(($(date +%s) + 120))
+          # Poll rollout status via the API until all replicas are ready (timeout 240s)
+          DEADLINE=$(($(date +%s) + 240))
           while [ "$(date +%s)" -lt "$DEADLINE" ]; do
             DEPLOY_JSON=$(curl -sf \
               -H "Authorization: Bearer ${TOKEN}" \
@@ -105,7 +105,7 @@ jobs:
             fi
             sleep 5
           done
-          echo "ERROR: Rollout did not complete within 120s"
+          echo "ERROR: Rollout did not complete within 240s"
           exit 1
 
       - name: Notify success
@@ -202,7 +202,7 @@ jobs:
             cat /tmp/patch_response.json
             exit 1
           fi
-          DEADLINE=$(($(date +%s) + 120))
+          DEADLINE=$(($(date +%s) + 240))
           while [ "$(date +%s)" -lt "$DEADLINE" ]; do
             DEPLOY_JSON=$(curl -sf \
               -H "Authorization: Bearer ${TOKEN}" \
@@ -217,7 +217,7 @@ jobs:
             fi
             sleep 5
           done
-          echo "ERROR: Rollout did not complete within 120s"
+          echo "ERROR: Rollout did not complete within 240s"
           exit 1
 
       - name: Notify success
