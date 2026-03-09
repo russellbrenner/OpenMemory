@@ -670,7 +670,7 @@ export const create_mcp_srv = () => {
                 [...params, seven_days_ago],
             );
             const [orphan_row] = await all_async(
-                `SELECT COUNT(*) as orphans FROM ${memories_table} m ${where ? where + ' AND' : 'WHERE'} NOT EXISTS (SELECT 1 FROM ${waypoints_table} w WHERE w.src_id = m.id OR w.dst_id = m.id)`,
+                `SELECT COUNT(*) as orphans FROM ${memories_table} m ${where ? where + ' AND' : 'WHERE'} NOT EXISTS (SELECT 1 FROM ${waypoints_table} w WHERE w.src_id = m.id::text OR w.dst_id = m.id::text)`,
                 params,
             );
 
