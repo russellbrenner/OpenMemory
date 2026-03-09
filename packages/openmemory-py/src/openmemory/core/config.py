@@ -83,6 +83,8 @@ class EnvConfig:
         self.ollama_embedding_model = os.getenv("OM_OLLAMA_EMBEDDING_MODEL")
         self.gemini_embedding_model = os.getenv("OM_GEMINI_EMBEDDING_MODEL")
         self.aws_embedding_model = os.getenv("OM_AWS_EMBEDDING_MODEL")
+        self.isaacus_key = get("ai", "isaacus_key", "OM_ISAACUS_API_KEY", "") or os.getenv("ISAACUS_API_KEY")
+        self.isaacus_embedding_model = get("ai", "isaacus_model", "OM_ISAACUS_MODEL", "kanon-2-embedder")
     @property
     def database_url(self) -> str:
         return self.db_url
