@@ -92,16 +92,12 @@ jobs:
           # Poll rollout status via the API until all replicas are ready (timeout 120s)
           DEADLINE=$(($(date +%s) + 120))
           while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-            READY=$(curl -sf \
+            DEPLOY_JSON=$(curl -sf \
               -H "Authorization: Bearer ${TOKEN}" \
               --cacert "${CACERT}" \
-              "${K8S_API}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/${DEPLOYMENT}" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); s=d.get('status',{}); print(s.get('readyReplicas',0))" 2>/dev/null)
-            DESIRED=$(curl -sf \
-              -H "Authorization: Bearer ${TOKEN}" \
-              --cacert "${CACERT}" \
-              "${K8S_API}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/${DEPLOYMENT}" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('spec',{}).get('replicas',1))" 2>/dev/null)
+              "${K8S_API}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/${DEPLOYMENT}")
+            READY=$(echo "${DEPLOY_JSON}" | jq -r '.status.readyReplicas // 0')
+            DESIRED=$(echo "${DEPLOY_JSON}" | jq -r '.spec.replicas // 1')
             echo "Rollout status: ${READY:-0}/${DESIRED:-?} replicas ready"
             if [ "${READY}" = "${DESIRED}" ] && [ -n "${READY}" ]; then
               echo "DEPLOYED: openmemory-api:${SHORT_SHA}"
@@ -208,16 +204,12 @@ jobs:
           fi
           DEADLINE=$(($(date +%s) + 120))
           while [ "$(date +%s)" -lt "$DEADLINE" ]; do
-            READY=$(curl -sf \
+            DEPLOY_JSON=$(curl -sf \
               -H "Authorization: Bearer ${TOKEN}" \
               --cacert "${CACERT}" \
-              "${K8S_API}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/${DEPLOYMENT}" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); s=d.get('status',{}); print(s.get('readyReplicas',0))" 2>/dev/null)
-            DESIRED=$(curl -sf \
-              -H "Authorization: Bearer ${TOKEN}" \
-              --cacert "${CACERT}" \
-              "${K8S_API}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/${DEPLOYMENT}" \
-              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('spec',{}).get('replicas',1))" 2>/dev/null)
+              "${K8S_API}/apis/apps/v1/namespaces/${NAMESPACE}/deployments/${DEPLOYMENT}")
+            READY=$(echo "${DEPLOY_JSON}" | jq -r '.status.readyReplicas // 0')
+            DESIRED=$(echo "${DEPLOY_JSON}" | jq -r '.spec.replicas // 1')
             echo "Rollout status: ${READY:-0}/${DESIRED:-?} replicas ready"
             if [ "${READY}" = "${DESIRED}" ] && [ -n "${READY}" ]; then
               echo "DEPLOYED: openmemory-dashboard:${SHORT_SHA}"
