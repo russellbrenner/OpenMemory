@@ -65,6 +65,25 @@ jobs:
           buildah inspect git.itsa.house/homelab/openmemory-api:${SHORT_SHA} | jq -r '.OCIv1.config.Entrypoint'
           echo "VALIDATED: openmemory-api:${SHORT_SHA}"
 
+      - name: Deploy API to k3s
+        run: |
+          IMAGE="git.itsa.house/homelab/openmemory-api:latest"
+          SOCKET="/run/k3s/containerd/containerd.sock"
+          CTR="/usr/local/bin/ctr"
+          # Export from buildah OCI storage and import into k3s containerd
+          TMPTAR=$(mktemp /tmp/openmemory-api-XXXXXX.tar)
+          buildah push "$IMAGE" "oci-archive:${TMPTAR}"
+          sudo "$CTR" -n k8s.io -a "$SOCKET" images import "$TMPTAR"
+          rm -f "$TMPTAR"
+          echo "IMPORTED: openmemory-api into k3s containerd (k8s.io namespace)"
+          # Tag so crictl/k3s can find it by the original reference
+          DIGEST=$(sudo "$CTR" -n k8s.io -a "$SOCKET" images ls name=="$IMAGE" 2>/dev/null | awk 'NR==2{print $3}')
+          echo "Image digest in containerd: $DIGEST"
+          # Rollout restart to pick up new image
+          kubectl rollout restart deployment/openmemory-api -n openmemory
+          kubectl rollout status deployment/openmemory-api -n openmemory --timeout=120s
+          echo "DEPLOYED: openmemory-api:${SHORT_SHA}"
+
       - name: Notify success
         if: success()
         env:
