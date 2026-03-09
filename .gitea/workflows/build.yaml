@@ -10,6 +10,15 @@ on:
       - dashboard/**
       - .gitea/workflows/build.yaml
 
+env:
+  REGISTRY: git.itsa.house
+  REGISTRY_USER: rbrenner
+  API_IMAGE: git.itsa.house/homelab/openmemory-api
+  DASHBOARD_IMAGE: git.itsa.house/homelab/openmemory-dashboard
+  K8S_NAMESPACE: openmemory
+  API_DEPLOYMENT: openmemory-api
+  DASHBOARD_DEPLOYMENT: openmemory-dashboard
+
 jobs:
   build-api:
     runs-on: self-hosted
@@ -32,14 +41,14 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
-          buildah login -u rbrenner -p "${REGISTRY_TOKEN}" git.itsa.house
+          buildah login -u "${{ env.REGISTRY_USER }}" -p "${REGISTRY_TOKEN}" "${{ env.REGISTRY }}"
 
       - name: Build API image
         run: |
           cd checkout/packages/openmemory-js
           buildah bud --isolation=chroot \
-            -t git.itsa.house/homelab/openmemory-api:latest \
-            -t git.itsa.house/homelab/openmemory-api:${SHORT_SHA} \
+            -t "${{ env.API_IMAGE }}:latest" \
+            -t "${{ env.API_IMAGE }}:${SHORT_SHA}" \
             -f Dockerfile .
 
       - name: Push API image
@@ -56,14 +65,14 @@ jobs:
             echo "Push failed after 3 attempts: $img"
             return 1
           }
-          push_retry git.itsa.house/homelab/openmemory-api:latest
-          push_retry git.itsa.house/homelab/openmemory-api:${SHORT_SHA}
+          push_retry "${{ env.API_IMAGE }}:latest"
+          push_retry "${{ env.API_IMAGE }}:${SHORT_SHA}"
 
       - name: Validate API image
         run: |
-          buildah pull git.itsa.house/homelab/openmemory-api:${SHORT_SHA}
-          buildah inspect git.itsa.house/homelab/openmemory-api:${SHORT_SHA} | jq -r '.OCIv1.config.Entrypoint'
-          echo "VALIDATED: openmemory-api:${SHORT_SHA}"
+          buildah pull "${{ env.API_IMAGE }}:${SHORT_SHA}"
+          buildah inspect "${{ env.API_IMAGE }}:${SHORT_SHA}" | jq -r '.OCIv1.config.Entrypoint'
+          echo "VALIDATED: ${{ env.API_DEPLOYMENT }}:${SHORT_SHA}"
 
       - name: Deploy API to k3s
         run: |
@@ -72,8 +81,8 @@ jobs:
           K8S_API="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}"
           TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
           CACERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-          NAMESPACE="openmemory"
-          DEPLOYMENT="openmemory-api"
+          NAMESPACE="${{ env.K8S_NAMESPACE }}"
+          DEPLOYMENT="${{ env.API_DEPLOYMENT }}"
           RESTART_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           PATCH="{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"kubectl.kubernetes.io/restartedAt\":\"${RESTART_TS}\"}}}}}"
           echo "Patching ${NAMESPACE}/${DEPLOYMENT} to trigger rollout..."
@@ -115,7 +124,7 @@ jobs:
         run: |
           curl -sf -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \"**[ci]** Built openmemory-api :${SHORT_SHA} (buildah)\", \"username\": \"Gitea CI\"}" || true
+            -d "{\"text\": \"**[ci]** Built ${{ env.API_DEPLOYMENT }}:${SHORT_SHA} (buildah)\", \"username\": \"Gitea CI\"}" || true
 
       - name: Notify failure
         if: failure()
@@ -124,7 +133,7 @@ jobs:
         run: |
           curl -sf -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \"**[ci] FAILED** :rotating_light: openmemory-api build\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"username\": \"Gitea CI\"}" || true
+            -d "{\"text\": \"**[ci] FAILED** :rotating_light: ${{ env.API_DEPLOYMENT }} build\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"username\": \"Gitea CI\"}" || true
 
   build-dashboard:
     runs-on: self-hosted
@@ -147,14 +156,14 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ secrets.REGISTRY_TOKEN }}
         run: |
-          buildah login -u rbrenner -p "${REGISTRY_TOKEN}" git.itsa.house
+          buildah login -u "${{ env.REGISTRY_USER }}" -p "${REGISTRY_TOKEN}" "${{ env.REGISTRY }}"
 
       - name: Build dashboard image
         run: |
           cd checkout/dashboard
           buildah bud --isolation=chroot \
-            -t git.itsa.house/homelab/openmemory-dashboard:latest \
-            -t git.itsa.house/homelab/openmemory-dashboard:${SHORT_SHA} \
+            -t "${{ env.DASHBOARD_IMAGE }}:latest" \
+            -t "${{ env.DASHBOARD_IMAGE }}:${SHORT_SHA}" \
             -f Dockerfile .
 
       - name: Push dashboard image
@@ -171,22 +180,22 @@ jobs:
             echo "Push failed after 3 attempts: $img"
             return 1
           }
-          push_retry git.itsa.house/homelab/openmemory-dashboard:latest
-          push_retry git.itsa.house/homelab/openmemory-dashboard:${SHORT_SHA}
+          push_retry "${{ env.DASHBOARD_IMAGE }}:latest"
+          push_retry "${{ env.DASHBOARD_IMAGE }}:${SHORT_SHA}"
 
       - name: Validate dashboard image
         run: |
-          buildah pull git.itsa.house/homelab/openmemory-dashboard:${SHORT_SHA}
-          buildah inspect git.itsa.house/homelab/openmemory-dashboard:${SHORT_SHA} | jq -r '.OCIv1.config.Cmd'
-          echo "VALIDATED: openmemory-dashboard:${SHORT_SHA}"
+          buildah pull "${{ env.DASHBOARD_IMAGE }}:${SHORT_SHA}"
+          buildah inspect "${{ env.DASHBOARD_IMAGE }}:${SHORT_SHA}" | jq -r '.OCIv1.config.Cmd'
+          echo "VALIDATED: ${{ env.DASHBOARD_DEPLOYMENT }}:${SHORT_SHA}"
 
       - name: Deploy dashboard to k3s
         run: |
           K8S_API="https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}"
           TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
           CACERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-          NAMESPACE="openmemory"
-          DEPLOYMENT="openmemory-dashboard"
+          NAMESPACE="${{ env.K8S_NAMESPACE }}"
+          DEPLOYMENT="${{ env.DASHBOARD_DEPLOYMENT }}"
           RESTART_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           PATCH="{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"kubectl.kubernetes.io/restartedAt\":\"${RESTART_TS}\"}}}}}"
           echo "Patching ${NAMESPACE}/${DEPLOYMENT} to trigger rollout..."
@@ -227,7 +236,7 @@ jobs:
         run: |
           curl -sf -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \"**[ci]** Built openmemory-dashboard :${SHORT_SHA} (buildah)\", \"username\": \"Gitea CI\"}" || true
+            -d "{\"text\": \"**[ci]** Built ${{ env.DASHBOARD_DEPLOYMENT }}:${SHORT_SHA} (buildah)\", \"username\": \"Gitea CI\"}" || true
 
       - name: Notify failure
         if: failure()
@@ -236,4 +245,4 @@ jobs:
         run: |
           curl -sf -X POST "$WEBHOOK_URL" \
             -H 'Content-Type: application/json' \
-            -d "{\"text\": \"**[ci] FAILED** :rotating_light: openmemory-dashboard build\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"username\": \"Gitea CI\"}" || true
+            -d "{\"text\": \"**[ci] FAILED** :rotating_light: ${{ env.DASHBOARD_DEPLOYMENT }} build\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"username\": \"Gitea CI\"}" || true
