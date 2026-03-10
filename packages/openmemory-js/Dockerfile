@@ -52,6 +52,15 @@ USER appuser
 # Increase Node.js heap size for runtime (vector operations and embeddings need headroom)
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
+# Isaacus Kanon-2 embedding provider defaults
+ENV OM_EMBEDDINGS=isaacus \
+    OM_VEC_DIM=1792 \
+    OM_EMBEDDING_FALLBACK=synthetic \
+    OM_ISAACUS_BASE_URL=https://api.isaacus.com/v1 \
+    OM_ISAACUS_MODEL=kanon-2-embedder \
+    OM_ISAACUS_ENRICH=false \
+    OM_ISAACUS_ENRICH_MODEL=kanon-2-enricher
+
 # Expose the application port
 EXPOSE 8080
 
