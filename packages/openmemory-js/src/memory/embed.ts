@@ -12,6 +12,16 @@ import {
 let gem_q: Promise<any> = Promise.resolve();
 export const emb_dim = () => env.vec_dim;
 
+// Lazy singleton — avoids creating a new HTTP client pool on every embed call.
+let _isaacus_client: any = null;
+const get_isaacus_client = async () => {
+    if (!_isaacus_client) {
+        const { Isaacus } = await import("isaacus");
+        _isaacus_client = new Isaacus({ apiKey: env.isaacus_key });
+    }
+    return _isaacus_client;
+};
+
 
 const EMBED_TIMEOUT_MS = Number(process.env.OM_EMBED_TIMEOUT_MS) || 30000;
 async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
@@ -366,8 +376,7 @@ async function emb_batch_openai(
 
 async function emb_isaacus(t: string, s: string): Promise<number[]> {
     if (!env.isaacus_key) throw new Error("Isaacus API key missing");
-    const { Isaacus } = await import("isaacus");
-    const client = new Isaacus({ apiKey: env.isaacus_key });
+    const client = await get_isaacus_client();
     const task_type = s === "__query__" ? "retrieval/query" : "retrieval/document";
     const res = await client.embeddings.create({
         model: env.isaacus_model as "kanon-2-embedder",
@@ -377,23 +386,35 @@ async function emb_isaacus(t: string, s: string): Promise<number[]> {
     return resize_vec(res.embeddings[0].embedding, env.vec_dim);
 }
 
+// Note: emb_batch_isaacus always uses retrieval/document task type.
+// It is only ever called from emb_batch_with_fallback which is invoked
+// for document storage — not for query embedding. Query embedding for
+// isaacus goes through embedForSector -> emb_isaacus which uses the
+// correct retrieval/query type when sector === "__query__".
 async function emb_batch_isaacus(
     txts: Record<string, string>,
 ): Promise<Record<string, number[]>> {
     if (!env.isaacus_key) throw new Error("Isaacus API key missing");
-    const { Isaacus } = await import("isaacus");
-    const client = new Isaacus({ apiKey: env.isaacus_key });
+    const client = await get_isaacus_client();
     const secs = Object.keys(txts);
     const res = await client.embeddings.create({
         model: env.isaacus_model as "kanon-2-embedder",
         texts: Object.values(txts),
         task: "retrieval/document",
     });
+    // Sort by returned index to handle out-of-order API responses.
+    const sorted = [...res.embeddings].sort((a: any, b: any) => a.index - b.index);
+    if (sorted.length !== secs.length) {
+        throw new Error(`emb_batch_isaacus: expected ${secs.length} embeddings, got ${sorted.length}`);
+    }
     const out: Record<string, number[]> = {};
-    secs.forEach((sec, i) => {
-        const emb = res.embeddings.find((e) => e.index === i);
-        out[sec] = resize_vec(emb?.embedding ?? [], env.vec_dim);
-    });
+    for (let i = 0; i < secs.length; i++) {
+        const emb = sorted[i];
+        if (!emb?.embedding?.length) {
+            throw new Error(`emb_batch_isaacus: missing embedding for sector '${secs[i]}'`);
+        }
+        out[secs[i]] = resize_vec(emb.embedding, env.vec_dim);
+    }
     return out;
 }
 
@@ -847,8 +868,7 @@ export interface ILGSResult { [key: string]: unknown; }
 export const enrich_isaacus = async (text: string): Promise<ILGSResult | null> => {
     if (!env.isaacus_enrich || env.emb_kind !== "isaacus") return null;
     try {
-        const { Isaacus } = await import("isaacus");
-        const client = new Isaacus({ apiKey: env.isaacus_key });
+        const client = await get_isaacus_client();
         const res = await client.enrichments.create({
             model: env.isaacus_enrich_model as "kanon-2-enricher",
             texts: [text],
@@ -941,7 +961,9 @@ export const getEmbeddingInfo = () => {
         i.model = env.isaacus_model;
         i.enrich = env.isaacus_enrich;
         i.enrich_model = env.isaacus_enrich_model;
-        i.batch_api = env.embed_mode === "simple";
+        // isaacus is not included in the embedMultiSector simple-mode gate;
+        // it always runs in per-sector mode regardless of embed_mode.
+        i.batch_api = false;
     } else if (env.emb_kind === "local") {
         i.configured = !!env.local_model_path;
         i.path = env.local_model_path;

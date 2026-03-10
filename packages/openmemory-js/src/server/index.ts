@@ -54,6 +54,22 @@ if (env.emb_kind !== "synthetic" && (tier === "hybrid" || tier === "fast")) {
     );
 }
 
+if (env.emb_kind === "isaacus" && env.vec_dim !== 1792) {
+    console.warn(
+        `[CONFIG] ⚠️  WARNING: Isaacus Kanon-2 produces 1792-dim vectors but OM_VEC_DIM=${env.vec_dim}.\n` +
+        `         Set OM_VEC_DIM=1792 in your environment/ConfigMap.`
+    );
+}
+
+if (env.emb_kind === "isaacus") {
+    console.warn(
+        `[CONFIG] NOTE: Isaacus provider requires database migration 003_vector_1792.sql.\n` +
+        `         If this is a fresh deployment or the migration has not been run, vector\n` +
+        `         inserts will fail with a dimension mismatch error from PostgreSQL.\n` +
+        `         Run: psql ... -f migrations/003_vector_1792.sql then scripts/reembed.ts`
+    );
+}
+
 app.use(req_tracker_mw());
 
 app.use((req: any, res: any, next: any) => {

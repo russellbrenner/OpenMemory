@@ -1,11 +1,18 @@
 /**
  * Re-embeds all memories using the current OM_EMBEDDINGS provider.
- * Run after a vector dimension migration.
- * Usage: ISAACUS_API_KEY=<key> OM_EMBEDDINGS=isaacus OM_VEC_DIM=1792 \
+ * Run after a vector dimension migration (e.g. 003_vector_1792.sql).
+ *
+ * Usage:
+ *   ISAACUS_API_KEY=<key> OM_EMBEDDINGS=isaacus OM_VEC_DIM=1792 \
  *   OM_BACKEND=postgres OM_PG_HOST=... npx tsx scripts/reembed.ts
+ *
+ * NOTE: Run 003_vector_1792.sql against the database BEFORE this script.
+ * The migration drops and recreates the vector column — all existing vectors
+ * are deleted and must be regenerated here.
  */
 import { all_async, memories_table } from "../src/core/db";
 import { embedMultiSector } from "../src/memory/embed";
+import { sectors } from "../src/memory/hsg";
 
 async function main() {
     // db auto-initialises at import time; no explicit init_db() needed.
@@ -14,14 +21,9 @@ async function main() {
     let ok = 0, fail = 0;
     for (const row of rows) {
         try {
-            // Use all sectors for a full re-embed (pass no secs = use the default classify path)
-            // embedMultiSector expects (id, content, sectors), derive sectors from content.
-            const { classify_content, sectors } = await import("../src/memory/hsg");
-            const cls = classify_content(row.content);
-            const all_sectors = [cls.primary, ...cls.additional].length > 0
-                ? [cls.primary, ...cls.additional]
-                : sectors;
-            await embedMultiSector(row.id, row.content, all_sectors);
+            // Always re-embed all sectors: the migration drops the entire vector
+            // column, so every sector for every memory must be regenerated.
+            await embedMultiSector(row.id, row.content, sectors);
             ok++;
             if (ok % 50 === 0) console.log(`[REEMBED] ${ok}/${rows.length}`);
         } catch (e) {
