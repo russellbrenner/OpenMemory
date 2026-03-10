@@ -1,6 +1,8 @@
 
 import { Memory } from "../src/core/memory";
 import { run_async, q, embed_log_table, make_transaction, memories_table, vectors_table, waypoints_table, users_table } from "../src/core/db";
+import { env } from "../src/core/cfg";
+import { enrich_isaacus } from "../src/memory/embed";
 
 // Mock time for evolutionary stability
 let mockTime: number | null = null;
@@ -173,6 +175,32 @@ async function test_transaction_factory() {
     console.log(" -> PASS: make_transaction() instances begin/rollback without collision.");
 }
 
+async function test_isaacus_config_defaults() {
+    console.log("\n[Isaacus] Config defaults are set");
+    if (env.isaacus_base_url !== "https://api.isaacus.com/v1") {
+        throw new Error(`FAIL: isaacus_base_url expected 'https://api.isaacus.com/v1', got '${env.isaacus_base_url}'`);
+    }
+    if (env.isaacus_model !== "kanon-2-embedder") {
+        throw new Error(`FAIL: isaacus_model expected 'kanon-2-embedder', got '${env.isaacus_model}'`);
+    }
+    if (env.isaacus_enrich !== false) {
+        throw new Error(`FAIL: isaacus_enrich expected false, got ${env.isaacus_enrich}`);
+    }
+    if (env.isaacus_enrich_model !== "kanon-2-enricher") {
+        throw new Error(`FAIL: isaacus_enrich_model expected 'kanon-2-enricher', got '${env.isaacus_enrich_model}'`);
+    }
+    console.log(" -> PASS: Isaacus config defaults match expected values.");
+}
+
+async function test_enrich_isaacus_noop() {
+    console.log("\n[Isaacus] enrich_isaacus is a no-op when OM_EMBEDDINGS != isaacus");
+    const result = await enrich_isaacus("test legal text");
+    if (result !== null) {
+        throw new Error(`FAIL: enrich_isaacus returned non-null when OM_EMBEDDINGS=synthetic: ${JSON.stringify(result)}`);
+    }
+    console.log(" -> PASS: enrich_isaacus returned null (no-op for non-isaacus provider).");
+}
+
 async function run_all() {
     try {
         await test_evolutionary_stability();
@@ -180,6 +208,8 @@ async function run_all() {
         await test_content_robustness();
         await test_embed_log_prune();
         await test_transaction_factory();
+        await test_isaacus_config_defaults();
+        await test_enrich_isaacus_noop();
         console.log("\n[OMNIBUS] ALL TESTS PASSED");
         process.exit(0);
     } catch (e) {
