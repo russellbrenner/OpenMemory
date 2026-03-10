@@ -836,6 +836,30 @@ export const bufferToVector = (b: Buffer) => {
 export const embed = (t: string) => embedForSector(t, "semantic");
 export const getEmbeddingProvider = () => env.emb_kind;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Isaacus Enricher
+// Enriches text with the Isaacus Legal Graph Schema (ILGS) — non-fatal.
+// Only runs when OM_ISAACUS_ENRICH=true and OM_EMBEDDINGS=isaacus.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ILGSResult { [key: string]: unknown; }
+
+export const enrich_isaacus = async (text: string): Promise<ILGSResult | null> => {
+    if (!env.isaacus_enrich || env.emb_kind !== "isaacus") return null;
+    try {
+        const { Isaacus } = await import("isaacus");
+        const client = new Isaacus({ apiKey: env.isaacus_key });
+        const res = await client.enrichments.create({
+            model: env.isaacus_enrich_model as "kanon-2-enricher",
+            texts: [text],
+        });
+        return (res.results?.[0]?.document as unknown as ILGSResult) ?? null;
+    } catch (e) {
+        console.error("[ENRICH] Isaacus enricher failed (non-fatal):", e);
+        return null;
+    }
+};
+
 /**
  * Batch embed multiple texts for a given sector.
  * Used by clause_similarity for efficient embedding of multiple clauses.

@@ -662,6 +662,7 @@ import {
     bufferToVector,
     vectorToBuffer,
     EmbeddingResult,
+    enrich_isaacus,
 } from "./embed";
 import { chunk_text } from "../utils/chunking";
 import { memory_dedup_total, memory_dedup_hamming } from "../core/metrics";
@@ -1143,6 +1144,12 @@ export async function add_hsg_memory(
     );
     const mean_vec = calc_mean_vec(emb_res, all_sectors);
     const mean_vec_buf = vectorToBuffer(mean_vec);
+
+    // Enrich with Isaacus ILGS (no-op unless OM_ISAACUS_ENRICH=true and OM_EMBEDDINGS=isaacus)
+    const enrich_result = await enrich_isaacus(content);
+    if (enrich_result !== null) {
+        metadata = { ...(metadata ?? {}), ilgs: enrich_result };
+    }
 
     const txn = make_transaction();
     await txn.begin();
