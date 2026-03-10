@@ -163,6 +163,9 @@ async function embed_with_provider(
             case "voyage":
                 result = await emb_voyage(t, s);
                 break;
+            case "isaacus":
+                result = await emb_isaacus(t, s);
+                break;
             case "local":
                 result = await emb_local(t, s);
                 break;
@@ -241,6 +244,9 @@ async function emb_batch_with_fallback(
                     break;
                 case "voyage":
                     result = await emb_batch_voyage(txts);
+                    break;
+                case "isaacus":
+                    result = await emb_batch_isaacus(txts);
                     break;
                 default:
 
@@ -350,6 +356,44 @@ async function emb_batch_openai(
         };
     }
 
+    return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Isaacus Provider
+// Kanon-2 is a legal-domain embedding model producing 1792-dim vectors.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function emb_isaacus(t: string, s: string): Promise<number[]> {
+    if (!env.isaacus_key) throw new Error("Isaacus API key missing");
+    const { Isaacus } = await import("isaacus");
+    const client = new Isaacus({ apiKey: env.isaacus_key });
+    const task_type = s === "__query__" ? "retrieval/query" : "retrieval/document";
+    const res = await client.embeddings.create({
+        model: env.isaacus_model as "kanon-2-embedder",
+        texts: [t],
+        task: task_type,
+    });
+    return resize_vec(res.embeddings[0].embedding, env.vec_dim);
+}
+
+async function emb_batch_isaacus(
+    txts: Record<string, string>,
+): Promise<Record<string, number[]>> {
+    if (!env.isaacus_key) throw new Error("Isaacus API key missing");
+    const { Isaacus } = await import("isaacus");
+    const client = new Isaacus({ apiKey: env.isaacus_key });
+    const secs = Object.keys(txts);
+    const res = await client.embeddings.create({
+        model: env.isaacus_model as "kanon-2-embedder",
+        texts: Object.values(txts),
+        task: "retrieval/document",
+    });
+    const out: Record<string, number[]> = {};
+    secs.forEach((sec, i) => {
+        const emb = res.embeddings.find((e) => e.index === i);
+        out[sec] = resize_vec(emb?.embedding ?? [], env.vec_dim);
+    });
     return out;
 }
 
@@ -867,6 +911,13 @@ export const getEmbeddingInfo = () => {
             emotional: get_model("emotional", "voyage"),
             reflective: get_model("reflective", "voyage"),
         };
+    } else if (env.emb_kind === "isaacus") {
+        i.configured = !!env.isaacus_key;
+        i.base_url = env.isaacus_base_url;
+        i.model = env.isaacus_model;
+        i.enrich = env.isaacus_enrich;
+        i.enrich_model = env.isaacus_enrich_model;
+        i.batch_api = env.embed_mode === "simple";
     } else if (env.emb_kind === "local") {
         i.configured = !!env.local_model_path;
         i.path = env.local_model_path;
