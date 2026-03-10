@@ -72,6 +72,11 @@ export const env = {
         process.env.OM_VOYAGE_BASE_URL,
         "https://api.voyageai.com/v1",
     ),
+    isaacus_key: str(process.env.ISAACUS_API_KEY ?? process.env.OM_ISAACUS_API_KEY, ""),
+    isaacus_base_url: str(process.env.OM_ISAACUS_BASE_URL, "https://api.isaacus.com/v1"),
+    isaacus_model: str(process.env.OM_ISAACUS_MODEL, "kanon-2-embedder"),
+    isaacus_enrich: (process.env.OM_ISAACUS_ENRICH ?? "false") === "true",
+    isaacus_enrich_model: str(process.env.OM_ISAACUS_ENRICH_MODEL, "kanon-2-enricher"),
     local_model_path:
         process.env.LOCAL_MODEL_PATH || process.env.OM_LOCAL_MODEL_PATH || "",
     vec_dim: num(process.env.OM_VEC_DIM, tier_dims[tier]),

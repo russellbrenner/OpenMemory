@@ -55,6 +55,7 @@ const get_defaults = (): model_cfg => ({
         aws: "amazon.titan-embed-text-v2:0",
         voyage: "voyage-3",
         local: "all-MiniLM-L6-v2",
+        isaacus: "kanon-2-embedder",
     },
     semantic: {
         ollama: "nomic-embed-text",
@@ -63,6 +64,7 @@ const get_defaults = (): model_cfg => ({
         aws: "amazon.titan-embed-text-v2:0",
         voyage: "voyage-3",
         local: "all-MiniLM-L6-v2",
+        isaacus: "kanon-2-embedder",
     },
     procedural: {
         ollama: "nomic-embed-text",
@@ -71,6 +73,7 @@ const get_defaults = (): model_cfg => ({
         aws: "amazon.titan-embed-text-v2:0",
         voyage: "voyage-3",
         local: "all-MiniLM-L6-v2",
+        isaacus: "kanon-2-embedder",
     },
     emotional: {
         ollama: "nomic-embed-text",
@@ -79,6 +82,7 @@ const get_defaults = (): model_cfg => ({
         aws: "amazon.titan-embed-text-v2:0",
         voyage: "voyage-3",
         local: "all-MiniLM-L6-v2",
+        isaacus: "kanon-2-embedder",
     },
     reflective: {
         ollama: "nomic-embed-text",
@@ -87,6 +91,7 @@ const get_defaults = (): model_cfg => ({
         aws: "amazon.titan-embed-text-v2:0",
         voyage: "voyage-3-large",
         local: "all-mpnet-base-v2",
+        isaacus: "kanon-2-embedder",
     },
 });
 
@@ -101,6 +106,7 @@ export const get_model = (sector: string, provider: string): string => {
     if (provider === "voyage" && process.env.OM_VOYAGE_MODEL) {
         return process.env.OM_VOYAGE_MODEL;
     }
+    if (provider === "isaacus") return process.env.OM_ISAACUS_MODEL || "kanon-2-embedder";
 
     const cfg = load_models();
     return (
